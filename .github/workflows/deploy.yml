@@ -1,34 +1,49 @@
-name: Website bauen und veröffentlichen
+name: Website für Hostinger bauen
+
+# Baut die Seite und legt die fertigen Dateien auf einen eigenen Branch.
+# Hostinger (hPanel -> Git) holt sich diesen Branch in den Website-Ordner.
+#
+#   hostinger-preview : Testversion (noindex) – bei jedem Push
+#   hostinger-live    : echte Version für greenbody.de – nur per Hand starten
+#                       (Actions -> "Website für Hostinger bauen" -> Run workflow -> live)
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   workflow_dispatch:
+    inputs:
+      live:
+        description: "Live-Version (für greenbody.de, ohne noindex) bauen?"
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: hostinger-${{ inputs.live && 'live' || 'preview' }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python tools/build.py
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Bauen
+        env:
+          PREVIEW: ${{ inputs.live && '0' || '1' }}
+        run: python tools/build.py
+      - name: Auf Deploy-Branch legen
+        env:
+          TARGET: ${{ inputs.live && 'hostinger-live' || 'hostinger-preview' }}
+        run: |
+          cd site
+          git init -q -b "$TARGET"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build von ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" "$TARGET"

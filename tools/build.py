@@ -3,9 +3,14 @@
 
 Aufruf:  python3 tools/build.py
 Vorschau: python3 -m http.server -d site 8000   ->  http://localhost:8000
+
+PREVIEW=1 python3 tools/build.py  ->  Testversion fuer eine Vorschau-Domain:
+    Suchmaschinen werden ausgesperrt (noindex), damit es keinen doppelten
+    Inhalt zur Live-Seite gibt.
 """
 import html
 import json
+import os
 import re
 import shutil
 from datetime import date, datetime
@@ -30,6 +35,8 @@ TOPICS = {
     "Fitness": ("fitness", "Training, Sixpack und die passende Ausrüstung."),
     "Schlaf": ("schlaf", "Besser schlafen, schneller regenerieren."),
 }
+
+PREVIEW = os.environ.get("PREVIEW") == "1"
 
 MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
           "August", "September", "Oktober", "November", "Dezember"]
@@ -116,7 +123,7 @@ def layout(title, body, *, description="", path="/", image="", active="", jsonld
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(full_title)}</title>
 <meta name="description" content="{e(description)}">
-{'<meta name="robots" content="noindex">' if noindex else ''}
+{'<meta name="robots" content="noindex, nofollow">' if noindex or PREVIEW else ''}
 <link rel="canonical" href="{SITE['url']}{path}">
 <meta property="og:type" content="{'article' if jsonld and jsonld.get('@type') == 'Article' else 'website'}">
 <meta property="og:title" content="{e(title)}">
@@ -286,6 +293,29 @@ def redirect(target):
 
 # ---------------------------------------------------------------- Build
 
+# Fuer Hostinger (Apache/LiteSpeed)
+HTACCESS = """ErrorDocument 404 /404.html
+DirectoryIndex index.html
+
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType text/css "access plus 1 week"
+  ExpiresByType application/javascript "access plus 1 week"
+  ExpiresByType text/html "access plus 10 minutes"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/xml text/xml
+</IfModule>
+"""
+
 def write(path, text):
     f = OUT / path.lstrip("/")
     if path.endswith("/"):
@@ -327,7 +357,11 @@ def main():
     write("/sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
           "".join(f"  <url><loc>{SITE['url']}{u}</loc>{f'<lastmod>{lastmod[u]}</lastmod>' if u in lastmod else ''}</url>\n" for u in urls) +
           "</urlset>\n")
-    write("/robots.txt", f"User-agent: *\nAllow: /\n\nSitemap: {SITE['url']}/sitemap.xml\n")
+    if PREVIEW:
+        write("/robots.txt", "User-agent: *\nDisallow: /\n")
+    else:
+        write("/robots.txt", f"User-agent: *\nAllow: /\n\nSitemap: {SITE['url']}/sitemap.xml\n")
+    write("/.htaccess", HTACCESS)
 
     rss = "".join(f"""  <item><title>{e(i['title'])}</title><link>{SITE['url']}{i['url']}</link><guid>{SITE['url']}{i['url']}</guid>
     <pubDate>{datetime.strptime(i['date'], '%Y-%m-%d').strftime('%a, %d %b %Y 00:00:00 +0000')}</pubDate><description>{e(i['description'])}</description></item>
@@ -336,9 +370,8 @@ def main():
 <rss version="2.0"><channel><title>Greenbody</title><link>{SITE['url']}/</link><description>{SITE['tagline']}</description><language>de</language>
 {rss}</channel></rss>
 """)
-    write("/CNAME", "greenbody.de\n")
-    write("/.nojekyll", "")
-    print(f"✓ {len(items)} Artikel + Startseite, Blog, {len(TOPICS)} Themen, Impressum, Datenschutz -> {OUT.relative_to(ROOT)}/")
+    print(f"✓ {len(items)} Artikel + Startseite, Blog, {len(TOPICS)} Themen, Impressum, Datenschutz -> {OUT.relative_to(ROOT)}/"
+          + (" (Vorschau-Modus: noindex)" if PREVIEW else ""))
 
 
 if __name__ == "__main__":

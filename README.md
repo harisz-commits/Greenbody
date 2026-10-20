@@ -45,17 +45,33 @@ description: Kurzbeschreibung für Google (ca. 150 Zeichen)
 
 Neuer Artikel = neue Datei nach diesem Muster, Bild nach `assets/img/` legen. Überschriften `<h2 id="...">` erscheinen automatisch im Inhaltsverzeichnis.
 
-## Veröffentlichen mit GitHub Pages (kostenlos)
+## Veröffentlichen auf Hostinger
 
-1. Branch nach `main` mergen.
-2. GitHub → *Settings → Pages → Source:* **GitHub Actions** wählen. Bei jedem Push wird die Seite automatisch gebaut.
-3. *Settings → Pages → Custom domain:* `greenbody.de` eintragen, „Enforce HTTPS“ aktivieren.
-4. Beim Domain-Anbieter die DNS-Einträge umstellen:
-   - `A`-Records für `greenbody.de`: `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
-   - `CNAME` für `www`: `<dein-github-name>.github.io`
-5. Erst wenn die neue Seite unter greenbody.de läuft, WordPress abschalten.
+GitHub baut die Seite bei jedem Push automatisch (`.github/workflows/deploy.yml`) und legt die fertigen Dateien auf einen eigenen Branch:
 
-Alternativ lässt sich der Ordner `site/` bei jedem beliebigen Webhoster hochladen.
+| Branch | Wofür | Suchmaschinen |
+|---|---|---|
+| `hostinger-preview` | Testversion zum Arbeiten (Vorschau-Domain) | gesperrt (noindex) |
+| `hostinger-live` | echte Seite für greenbody.de – nur per Hand: *Actions → Website für Hostinger bauen → Run workflow → live* | erlaubt |
+
+### Vorschau einrichten (einmalig)
+
+1. **Vorschau-Domain anlegen** – eine von beiden:
+   - hPanel → *Domains → Subdomains*: z. B. `neu.greenbody.de` (geht, wenn die Domain bei Hostinger liegt) **oder** eine Subdomain einer anderen Domain, die du bei Hostinger hast.
+   - oder hPanel → *Website hinzufügen → „Temporäre Domain verwenden“* (kostenlose `….hostingersite.com`-Adresse).
+2. hPanel → die Vorschau-Website → *Erweitert → Git*:
+   - Repository: `https://github.com/harisz-commits/Greenbody.git`
+   - Branch: `hostinger-preview`
+   - Verzeichnis: leer lassen (= Hauptordner der Subdomain). Der Ordner muss leer sein – vorher z. B. die `default.php` löschen.
+   - Da das Repo privat ist: den angezeigten SSH-Schlüssel bei GitHub unter *Repo → Settings → Deploy keys* eintragen und die SSH-Adresse `git@github.com:harisz-commits/Greenbody.git` verwenden.
+3. *Auto-Deployment* einschalten und die angezeigte Webhook-URL bei GitHub unter *Repo → Settings → Webhooks* eintragen. Dann ist jede Änderung nach ca. 1 Minute online.
+
+Wichtig: Die Seite muss im **Hauptordner einer (Sub-)Domain** liegen, nicht in einem Unterordner wie `deinedomain.de/greenbody/` – sonst stimmen die Pfade zu Bildern und CSS nicht.
+
+### Später live gehen
+
+1. Workflow einmal mit „live“ starten → Branch `hostinger-live` entsteht.
+2. In hPanel bei der Website **greenbody.de** WordPress sichern/entfernen und Git auf Branch `hostinger-live` einrichten (wie oben).
 
 ## Was sich gegenüber WordPress geändert hat
 
